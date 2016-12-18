@@ -1,0 +1,13 @@
+dotty:
+  repo: https://github.com/georgek42/dotfiles.git
+bash:
+  - ~/:
+    - .bashrc
+    - .bash_profile
+vim:
+  - ~/:
+    - .vimrc
+    - .vim: $rall
+sublime:
+  - ~/.config/sublime-text-3/Packages/:
+    - User: $rall

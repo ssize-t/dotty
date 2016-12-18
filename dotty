@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+import yaml
+import os
+import argparse
+import shutil
+from subprocess import call
+
+dotty = """ .---.         ,,
+ ,,        /     \       ;,,'
+;, ;      (  o  o )      ; ;
+  ;,';,,,  \  \/ /      ,; ;
+,,,  ;,,,,;;,`   '-,;'''',,,'
+;,, ;,, ,,,,   ,;  ,,,'';;,,;''';
+ ;,,,;    ~~'  '';,,''',,;''''
+                    '''"""
+conf = {
+	'root': '',
+	'repo': None,
+	'commit': 'individual'
+}
+
+def main():
+	global conf
+	parser = argparse.ArgumentParser()
+	parser.add_argument('-i', '--init', action='store_true', dest='init', help='initialize dotty directory')
+	parser.add_argument('-u', '--update', action='store_true', dest='update', help='update dotfiles')
+	parser.add_argument('-r', '--restore', action='store_true', dest='restore', help='restore dotfiles')
+	parser.add_argument('-p', '--push', action='store_true', dest='push', help='push to repo')
+	parser.add_argument('-v', '--version', action='version', version='doTTy v.0.1')
+	args = parser.parse_args()
+	print('doTTy v.0.1')
+	print(dotty)
+	dottconf = read_conf('dotty.yml')
+	if (args.init):
+		init_repo()
+	if (args.update):
+		for service in dottconf:
+			clone(dottconf[service], '', conf['root'] + '/' + service)
+			print_success('Cloned {}'.format(service))
+			if conf['commit'] == 'individual':
+				commit('Update {}'.format(service))
+				print_success('Committed {}'.format(service))
+		if conf['commit'] == 'group':
+			commit('Update dotfiles')
+			print_success('Committed group')
+	if (args.restore):
+		for service in dottconf:
+			restore(dottconf[service], service)
+			print_success('Restored {}'.format(service))
+	if (args.push):
+		push()
+
+def commit(msg):
+	call(['git', 'add', '.'])
+	call(['git', 'commit', '-m', msg])
+
+def push():
+	call(['git', 'push', '-f', 'origin', 'master'])
+	print_success('Pushed to repo')
+
+def init_repo():
+	call(['git', 'init'])
+	call(['git', 'add', '.'])
+	commit('Initial commit')
+	try:
+		call(['git', 'remote', 'add', 'origin', conf['repo']])
+	except TypeError as tpe:
+		print_error('Remote repo not set')
+
+
+def restore(service, label):
+	for folder in service:
+		if not os.path.exists(os.path.expanduser(next(iter(folder)))):
+			os.makedirs(os.path.expanduser(next(iter(folder))))
+		copytree(os.getcwd() + '/' + label, os.path.expanduser(next(iter(folder))))
+
+def copytree(src, dst):
+	for item in os.listdir(src):
+		if not os.path.exists(dst):
+			os.makedirs(dst)
+		s = os.path.join(src, item)
+		d = os.path.join(dst, item)
+		if os.path.isdir(s):
+			copytree(s, d)
+		else:
+			if os.path.exists(d):
+				os.remove(d)
+			shutil.copy2(s, d)
+
+# Recursively clone a service
+def clone(service, dir, label):
+	if type(service) is dict:
+		for folder in service:
+			if dir == '':
+				clone(service[folder], dir + folder, label)
+			else:
+				clone(service[folder], dir + '/' + folder, label + '/' + folder)
+	elif type(service) is list:
+		for dot in service:
+			clone(dot, dir, label)
+	elif service in [ '$all', '$rall' ]:
+		if service == '$all':
+			for file in [f for f in os.listdir(os.path.expanduser(dir)) if os.path.isfile(os.path.expanduser(dir + '/' + f))]:
+				if not os.path.exists(os.getcwd() + label):
+					os.makedirs(os.getcwd() + label)
+				shutil.copy2(os.path.expanduser(dir + '/' + file), os.getcwd() + label + '/' + file)
+		else:
+			copytree(os.path.expanduser(dir), os.getcwd() + label)
+	else:
+		if not os.path.exists(os.getcwd() + label):
+			os.makedirs(os.getcwd() + label)
+		shutil.copy2(os.path.expanduser(dir + service), os.getcwd() + label + '/' + service)
+
+def print_error(str):
+	print('\033[31m' + '>> ' + '\x1B[0m' + str)
+
+def print_success(str):
+	print('\033[32m' + '>> ' + '\x1B[0m' + str)
+
+def read_conf(filename):
+	global conf
+	try:
+		dottconf = yaml.load(open(filename))
+	except FileNotFoundError as fnf:
+		print_error('dotty.yml not found')
+	except yaml.YAMLError as yme:
+		print_error('dotty.yml formatting error')
+	user = dottconf['dotty']
+	for key in user:
+		if key in conf:
+			conf[key] = user[key]
+	del dottconf['dotty']
+	return dottconf
+
+if __name__ == "__main__":
+	main()
